@@ -1,15 +1,19 @@
 const express = require("express");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
+const mysql = require("mysql2/promise");
+const dotenv = require("dotenv");
 
+dotenv.config();
 const app = express();
 
-// fake data
-const users = [
-  { id: 1, name: "Nguyễn Văn A", email: "nga@example.com", age: 28 },
-  { id: 2, name: "Trần Thị B", email: "btran@example.com", age: 35 },
-  { id: 3, name: "Lê Văn C", email: "levac@example.com", age: 42 },
-];
+// Config MySQL
+const pool = mysql.createPool({
+  host:  process.env.DB_HOST ?? "localhost",
+  user: process.env.DB_USER ?? "root",
+  password: process.env.DB_PASSWORD ?? "",
+  database: process.env.DB_DATABASE ?? "",
+});
 
 // Config Swagger
 const options = {
@@ -32,9 +36,11 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get("/", (req, res) => {
   res.json({
     message: "Hello world!",
+    api_docs: "http://3.27.216.224/api-docs",
   });
 });
 
+// Endpoint: Lấy danh sách người dùng
 /**
  * @swagger
  * /users:
@@ -57,12 +63,21 @@ app.get("/", (req, res) => {
  *                     type: string
  *                   email:
  *                     type: string
- *                   age:
- *                     type: integer
+ *                   created_at:
+ *                     type: string
+ *                     format: date-time
+ *                   updated_at:
+ *                     type: string
+ *                     format: date-time
  */
-app.get("/users", (req, res) => {
-  // Logic lấy danh sách người dùng
-  res.json(users);
+app.get("/users", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM `users`");
+    res.json(rows);
+  } catch (error) {
+    console.error("Lỗi khi lấy danh sách người dùng:", error);
+    res.status(500).json({ message: "Lỗi server" });
+  }
 });
 
 /**
@@ -70,6 +85,7 @@ app.get("/users", (req, res) => {
  * /users/{id}:
  *   get:
  *     summary: Lấy thông tin người dùng theo ID
+ *     description: Trả về thông tin chi tiết của một người dùng theo ID
  *     parameters:
  *       - in: path
  *         name: id
@@ -78,53 +94,43 @@ app.get("/users", (req, res) => {
  *           type: integer
  *     responses:
  *       200:
- *         description: Thông tin người dùng
+ *         description: Thông tin người dùng thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 name:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                 created_at:
+ *                   type: string
+ *                   format: date-time
+ *                 updated_at:
+ *                   type: string
+ *                   format: date-time
  *       404:
  *         description: Không tìm thấy người dùng
  */
-app.get("/users/:id", (req, res) => {
-  const userId = parseInt(req.params.id);
-  const user = users.find((u) => u.id === userId);
+app.get("/users/:id", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const [rows] = await pool.query("SELECT * FROM `users` WHERE id = ?", [
+      userId,
+    ]);
 
-  if (user) {
-    res.json(user);
-  } else {
-    res.status(404).json({ message: "Không tìm thấy người dùng" });
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Lỗi khi lấy thông tin người dùng:", error);
+    res.status(500).json({ message: "Lỗi server" });
   }
-});
-
-/**
- * @swagger
- * /users:
- *   post:
- *     summary: Tạo người dùng mới
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               email:
- *                 type: string
- *               age:
- *                 type: integer
- *     responses:
- *       201:
- *         description: Tạo người dùng thành công
- */
-app.post("/users", express.json(), (req, res) => {
-  const newUser = {
-    id: users.length + 1,
-    name: req.body.name,
-    email: req.body.email,
-    age: req.body.age,
-  };
-
-  users.push(newUser);
-  res.status(201).json(newUser);
 });
 
 const PORT = 3000;
