@@ -3,6 +3,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 const mysql = require("mysql2/promise");
 const dotenv = require("dotenv");
+const cors = require("cors");
 
 dotenv.config();
 const app = express();
@@ -31,6 +32,7 @@ const options = {
 const swaggerSpec = swaggerJsdoc(options);
 
 // Middleware Swagger UI
+app.use(cors());
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get("/", (req, res) => {
